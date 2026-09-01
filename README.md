@@ -1,38 +1,46 @@
 # FlyRank AI — Backend Track: Task API
 
-A simple CRUD API for managing tasks, built with Express and backed by a SQLite database.
+A CRUD API for managing tasks, built with Express and backed by PostgreSQL, running in Docker.
 
-## Why SQLite?
-
-SQLite was chosen because it's a single file with zero setup — no separate database server to install or run. It's perfect for a small project like this, and it still teaches the real skills (SQL, persistence, parameterized queries) that scale up to bigger databases like PostgreSQL later.
-
-## Where the database lives
-
-The database is a single file, `tasks.db`, created automatically the first time the server runs. It sits in the project root, right next to `first_assignment.js`.
-
-## How to run it
+## How to run it (one command)
 
 1. Clone this repo
-2. Run `npm install`
-3. Run `node first_assignment.js`
-4. The server starts on `http://localhost:3000`, and `tasks.db` is created automatically with 3 seeded example tasks.
+2. Copy `.env.example` to `.env`
+3. Run `docker compose up`
+4. The API is live at `http://localhost:3000`, with Postgres running alongside it and 3 example tasks seeded automatically.
+
+## Environment variables
+
+See `.env.example` — copy it to `.env` and fill in real values (or use the defaults, which match `docker-compose.yml`).
 
 ## Endpoints
 
-- `GET /tasks` — list all tasks
-- `GET /tasks/:id` — get one task
-- `POST /tasks` — create a task (`{ "title": "..." }`)
-- `PUT /tasks/:id` — update a task (`{ "title": "...", "done": true }`)
-- `DELETE /tasks/:id` — delete a task
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | /tasks | List all tasks |
+| GET | /tasks/:id | Get one task |
+| POST | /tasks | Create a task (`{ "title": "..." }`) |
+| PUT | /tasks/:id | Update a task (`{ "title": "...", "done": true }`) |
+| DELETE | /tasks/:id | Delete a task |
 
-## Exploring the database directly
+## Example request
 
-Opened `tasks.db` in DB Browser for SQLite and ran:
+\`\`\`
+curl -i http://localhost:3000/tasks
+\`\`\`
 
-```sql
-SELECT * FROM tasks;
-```
 
-This returned all 3 seeded tasks, matching exactly what the live API returns from `GET /tasks` — proof that the API and the database file are reading from the same source of truth.
+Returns the 3 seeded tasks as JSON, straight from Postgres.
+
+## Storage history
+
+This project moved storage three times, with the API never changing:
+- **A1:** an in-memory array (data lost on restart)
+- **A2:** a SQLite file, `tasks.db` (survives app restarts)
+- **A3 (this):** PostgreSQL, running in its own Docker container with a volume (survives full container restarts too)
+
+## Proving persistence
+
+Created a few tasks, ran `docker compose down` then `docker compose up` again — the full app and database were destroyed and recreated, and all tasks were still there, thanks to the named volume (`taskdata`) keeping the actual data outside the container.
 
 ![DB Browser screenshot](./db-browser-screenshot.png)
