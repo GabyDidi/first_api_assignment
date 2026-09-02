@@ -1,46 +1,50 @@
-# FlyRank AI — Backend Track: Task API
+# FlyRank AI — Backend Track: Task & Auth API
 
-A CRUD API for managing tasks, built with Express and backed by PostgreSQL, running in Docker.
+A CRUD API for managing tasks, backed by PostgreSQL, with Supabase-powered authentication protecting private routes. Fully containerized with Docker.
 
-## How to run it (one command)
+## How to run it
 
 1. Clone this repo
-2. Copy `.env.example` to `.env`
+2. Copy `.env.example` to `.env` and fill in your own Supabase URL/key + database credentials
 3. Run `docker compose up`
-4. The API is live at `http://localhost:3000`, with Postgres running alongside it and 3 example tasks seeded automatically.
+4. The API is live at `http://localhost:3000`, Swagger docs at `http://localhost:3000/docs`
 
 ## Environment variables
 
-See `.env.example` — copy it to `.env` and fill in real values (or use the defaults, which match `docker-compose.yml`).
+See `.env.example` for the required keys: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_KEY`, `PORT`.
 
 ## Endpoints
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | /tasks | List all tasks |
-| GET | /tasks/:id | Get one task |
-| POST | /tasks | Create a task (`{ "title": "..." }`) |
-| PUT | /tasks/:id | Update a task (`{ "title": "...", "done": true }`) |
-| DELETE | /tasks/:id | Delete a task |
+| Method | Endpoint | Auth required | Description |
+|---|---|---|---|
+| GET | /tasks | No | List all tasks |
+| GET | /tasks/:id | No | Get one task |
+| POST | /tasks | No | Create a task |
+| PUT | /tasks/:id | No | Update a task |
+| DELETE | /tasks/:id | No | Delete a task |
+| GET | /public/info | No | Public welcome message |
+| POST | /auth/signup | No | Create a new user account |
+| POST | /auth/login | No | Log in, returns access + refresh token |
+| POST | /auth/logout | Yes | End the current session |
+| GET | /protected/profile | Yes | Get the logged-in user's profile |
+| GET | /protected/dashboard | Yes | Example second protected route, reusing the same auth middleware |
 
-## Example request
+## Auth flow
 
-\`\`\`
-curl -i http://localhost:3000/tasks
-\`\`\`
+1. Sign up or log in via Supabase — this project never stores or hashes passwords itself.
+2. Login returns a JWT access token.
+3. Protected routes require `Authorization: Bearer <token>` in the header.
+4. A reusable `requireAuth` middleware verifies the token with Supabase before letting the route run, and rejects missing/invalid/expired tokens with 401.
 
+## Swagger UI
 
-Returns the 3 seeded tasks as JSON, straight from Postgres.
+Interactive docs, with a padlock on every protected route, live at `/docs`. Click "Authorize," paste a token from `/auth/login`, and test protected routes directly from the browser.
 
-## Storage history
+![Swagger UI screenshot](./swagger-screenshot.png)
 
-This project moved storage three times, with the API never changing:
-- **A1:** an in-memory array (data lost on restart)
-- **A2:** a SQLite file, `tasks.db` (survives app restarts)
-- **A3 (this):** PostgreSQL, running in its own Docker container with a volume (survives full container restarts too)
+## Storage & security history
 
-## Proving persistence
-
-Created a few tasks, ran `docker compose down` then `docker compose up` again — the full app and database were destroyed and recreated, and all tasks were still there, thanks to the named volume (`taskdata`) keeping the actual data outside the container.
-
-![DB Browser screenshot](./db-browser-screenshot.png)
+- **A1:** in-memory array
+- **A2:** SQLite file
+- **A3:** PostgreSQL in Docker, with a full docker-compose stack
+- **A4 (this):** Supabase Auth added on top — routes are now guarded, not open to anyone
