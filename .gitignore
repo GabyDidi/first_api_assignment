@@ -3,3 +3,4 @@ node_modules/
 "FlyRank AI details/"
 .env
 tasks.db
+scraper/cache/
