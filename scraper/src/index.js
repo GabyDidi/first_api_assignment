@@ -8,23 +8,48 @@ const TARGET_BASE = "https://books.toscrape.com";
 const CACHE_DIR = path.join(__dirname, "..", "cache");
 const OUTPUT_DIR = path.join(__dirname, "..", "output");
 
-async function fetchPage(url, cacheFileName) {
+let stats = { fetched: 0, cacheHits: 0, failedPages: 0 };
+
+async function fetchPage(url, cacheFileName, allowRetry = true) {
   const cachePath = path.join(CACHE_DIR, cacheFileName);
   if (fs.existsSync(cachePath)) {
     const html = fs.readFileSync(cachePath, "utf-8");
     console.log(`CACHE HIT: ${cacheFileName} (${html.length} bytes)`);
+    stats.cacheHits++;
     return { html, wasCached: true };
   }
+
   console.log(`FETCH: ${url}`);
-  const response = await fetch(url, {
-    headers: { "User-Agent": "FlyRankInternshipA9/1.0 (+https://github.com/GabyDidi/first_api_assignment)" },
-    signal: AbortSignal.timeout(5000)
-  });
-  if (response.status !== 200) throw new Error(`Failed to fetch ${url}: status ${response.status}`);
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { "User-Agent": "FlyRankInternshipA9/1.0 (+https://github.com/GabyDidi/first_api_assignment)" },
+      signal: AbortSignal.timeout(5000)
+    });
+  } catch (err) {
+    if (allowRetry) {
+      console.log(`  timeout/network error, retrying once...`);
+      await sleep(1000);
+      return fetchPage(url, cacheFileName, false);
+    }
+    throw new Error(`Network error fetching ${url}: ${err.message}`);
+  }
+
+  if (response.status >= 500 && allowRetry) {
+    console.log(`  got ${response.status}, retrying once...`);
+    await sleep(1000);
+    return fetchPage(url, cacheFileName, false);
+  }
+
+  if (response.status !== 200) {
+    throw new Error(`Failed to fetch ${url}: status ${response.status}`);
+  }
+
   const html = await response.text();
   fs.mkdirSync(CACHE_DIR, { recursive: true });
   fs.writeFileSync(cachePath, html);
   console.log(`FETCH: ${cacheFileName} (${html.length} bytes)`);
+  stats.fetched++;
   return { html, wasCached: false };
 }
 
@@ -113,19 +138,45 @@ function validateRecords(rawRecords) {
 }
 
 async function main() {
+  const startTime = Date.now();
   console.log("Scraper starting...");
+
   const bookUrls = await discoverCataloguePages();
   console.log(`discovered=${bookUrls.length}`);
+
+  // TEMPORARY: uncomment this line to test failure handling with a fake URL
+  // bookUrls.push(`${TARGET_BASE}/catalogue/this-book-does-not-exist_9999/index.html`);
+
   const rawRecords = [];
   for (const url of bookUrls) {
-    rawRecords.push(await extractBook(url, `${TARGET_BASE}/catalogue/page-1.html`));
+    try {
+      const record = await extractBook(url, `${TARGET_BASE}/catalogue/page-1.html`);
+      rawRecords.push(record);
+    } catch (err) {
+      console.log(`  FAILED: ${url} — ${err.message}`);
+      stats.failedPages++;
+    }
   }
   console.log(`detail_pages=${rawRecords.length}`);
+
   const { validRecords, errors } = validateRecords(rawRecords);
   console.log(`valid=${validRecords.length} invalid=${errors.length}`);
+
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   fs.writeFileSync(path.join(OUTPUT_DIR, "books.json"), JSON.stringify(validRecords, null, 2));
   fs.writeFileSync(path.join(OUTPUT_DIR, "errors.json"), JSON.stringify(errors, null, 2));
+
+  const runReport = {
+    start_time: new Date(startTime).toISOString(),
+    duration_ms: Date.now() - startTime,
+    pages_fetched: stats.fetched,
+    cache_hits: stats.cacheHits,
+    valid_records: validRecords.length,
+    invalid_records: errors.length,
+    failed_pages: stats.failedPages
+  };
+  fs.writeFileSync(path.join(OUTPUT_DIR, "run-report.json"), JSON.stringify(runReport, null, 2));
+  console.log("Run report:", JSON.stringify(runReport, null, 2));
 }
 
 main();
