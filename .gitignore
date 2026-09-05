@@ -1,6 +1,6 @@
 node_modules/
-"Assignments In Theory/"
-"FlyRank AI details/"
+Assignments In Theory/
+FlyRank AI details/
 .env
 tasks.db
 scraper/cache/
